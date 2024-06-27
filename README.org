@@ -11,24 +11,26 @@ I use nix for reproducibility. You can use my flake file for developpement purpo
 
 This is a classic rust project. You can compile it having the rust compiler like so :
 
-```bash
+#+begin_src shell
 cargo build --release
-```
+#+end_src
 
 The binary will be in the target/release folder.
 
 If you are a nix user you can use the command
 
-```bash
+#+begin_src shell
 nix build
-```
+#+end_src
+
 to obtain the same result.
 
 You can also use the command
 
-```bash
+#+begin_src shell
 nix develop
-```
+#+end_src
+
 to obtain a shell with all the dependencies installed that will get you ready for developping the project in the same environment like me.
 
 
@@ -36,9 +38,9 @@ to obtain a shell with all the dependencies installed that will get you ready fo
 
 The project works like a classic debugger like gdb. You should compile your project with debugging symbols then, run :
 
-```bash
+#+begin_src shell
 vdebugger <your_program>
-```
+#+end_src
 
 to start debugging.
 
