@@ -1,0 +1,44 @@
+* vdebugger
+
+** Description
+
+This is a debugger for linux programs. It should work on programs compiled for linux with a dwarf file.
+
+I use nix for reproducibility. You can use my flake file for developpement purpose or to automatically compiled the application.
+
+
+** Installation
+
+This is a classic rust project. You can compile it having the rust compiler like so :
+
+```bash
+cargo build --release
+```
+
+The binary will be in the target/release folder.
+
+If you are a nix user you can use the command
+
+```bash
+nix build
+```
+to obtain the same result.
+
+You can also use the command
+
+```bash
+nix develop
+```
+to obtain a shell with all the dependencies installed that will get you ready for developping the project in the same environment like me.
+
+
+** How to use
+
+The project works like a classic debugger like gdb. You should compile your project with debugging symbols then, run :
+
+```bash
+vdebugger <your_program>
+```
+
+to start debugging.
+
