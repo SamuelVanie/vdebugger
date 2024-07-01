@@ -1,13 +1,24 @@
 use std::str::FromStr;
 
 use linefeed::{Interface, ReadResult};
-use nix::{sys::{ptrace::cont, wait::waitpid}, unistd::Pid};
+use nix::{
+    sys::{ptrace::cont, wait::waitpid},
+    unistd::Pid,
+};
 use strum_macros::EnumString;
+
+static NO_COMMAND_PROVIDED_ERROR_MSG: &str = r#"
+No command or invalid command were provided
+Try using one of the following:
+1. continue
+2. exit
+"#;
 
 #[derive(Debug, PartialEq, EnumString)]
 #[strum(ascii_case_insensitive)]
 enum Command {
     CONTINUE,
+    EXIT,
 }
 
 pub struct Debugger {
@@ -27,15 +38,18 @@ impl Debugger {
 
     pub fn handle_command(&self, command: &String) {
         let command_line = command.split(" ").collect::<Vec<&str>>();
-        let command = command_line.get(0).unwrap();
+        let Some(command) = command_line.get(0) else {
+            println!("{NO_COMMAND_PROVIDED_ERROR_MSG}");
+            return;
+        };
 
         if let Ok(ecommand) = Command::from_str(command) {
             match ecommand {
                 Command::CONTINUE => self.continue_execution(),
+                Command::EXIT => std::process::exit(0)
             }
         } else {
-            println!("Invalid command entered");
-            unsafe { nix::libc::_exit(0) };
+            println!("{NO_COMMAND_PROVIDED_ERROR_MSG}");
         }
     }
 
@@ -43,9 +57,10 @@ impl Debugger {
         let _wait_status = waitpid(self.m_pid, None);
         let reader = Interface::new("vdebugger").unwrap();
         println!("The program name is {}", self.m_prog_name);
-        reader.set_prompt("vdebugger> ").unwrap();
+        reader.set_prompt("vdebugger> ").unwrap_or_else(|_| {});
 
-        while let ReadResult::Input(input) = reader.read_line().unwrap() {
+        while let ReadResult::Input(input) = reader.read_line().unwrap_or_else(|_| ReadResult::Eof)
+        {
             self.handle_command(&input);
             reader.add_history_unique(input.clone());
             println!("got input {:?}", input);
