@@ -1,4 +1,6 @@
 use debugger::Debugger;
+use breakpoint::Breakpoint;
+
 use nix::{
     sys::ptrace::traceme,
     unistd::{execv, fork, write, ForkResult},
@@ -6,6 +8,7 @@ use nix::{
 use std::{env, ffi::CString};
 
 pub mod debugger;
+pub mod breakpoint;
 
 fn main() {
     if env::args().len() < 2 {
