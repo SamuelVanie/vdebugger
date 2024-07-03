@@ -22,18 +22,18 @@ enum Command {
 }
 
 pub struct Debugger {
-    m_prog_name: String,
-    m_pid: Pid,
+    prog_name: String,
+    pid: Pid,
 }
 
 impl Debugger {
-    pub fn new(m_prog_name: String, m_pid: Pid) -> Self {
-        Self { m_prog_name, m_pid }
+    pub fn new(prog_name: String, pid: Pid) -> Self {
+        Self { prog_name, pid }
     }
 
     pub fn continue_execution(&self) {
-        cont(self.m_pid, None).unwrap();
-        let _wait_status = waitpid(self.m_pid, None);
+        cont(self.pid, None).unwrap();
+        let _wait_status = waitpid(self.pid, None);
     }
 
     pub fn handle_command(&self, command: &String) {
@@ -54,9 +54,9 @@ impl Debugger {
     }
 
     pub fn run(&self) {
-        let _wait_status = waitpid(self.m_pid, None);
+        let _wait_status = waitpid(self.pid, None);
         let reader = Interface::new("vdebugger").unwrap();
-        println!("The program name is {}", self.m_prog_name);
+        println!("The program name is {}", self.prog_name);
         reader.set_prompt("vdebugger> ").unwrap_or_else(|_| {});
 
         while let ReadResult::Input(input) = reader.read_line().unwrap_or_else(|_| ReadResult::Eof)
