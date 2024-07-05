@@ -1,8 +1,7 @@
 use debugger::Debugger;
-use breakpoint::Breakpoint;
 
 use nix::{
-    sys::ptrace::traceme,
+    sys::{personality::{self, Persona}, ptrace::traceme},
     unistd::{execv, fork, write, ForkResult},
 };
 use std::{env, ffi::CString};
@@ -31,7 +30,7 @@ fn main() {
         Ok(ForkResult::Parent { child, .. }) => {
             // execute the debugger in the parent
             println!("Starting the debugging process {child}");
-            let dbg = Debugger::new(program, child);
+            let mut dbg = Debugger::new(program, child);
             dbg.run();
         }
         Ok(ForkResult::Child) => {
@@ -41,6 +40,12 @@ fn main() {
                 "It's unsafe for me, the child to write directly on the stdout\n".as_bytes(),
             )
                 .ok();
+            
+            // Disable address space randomization
+            personality::set(Persona::ADDR_NO_RANDOMIZE).unwrap_or_else(|_| {
+                eprintln!("Cannot remove address randomization from the child process");
+                std::process::exit(-1);
+            });
             
             traceme().unwrap_or_else(|_| {
                 eprintln!("Cannot trace the child process");

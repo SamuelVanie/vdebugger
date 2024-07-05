@@ -24,7 +24,6 @@ impl Breakpoint {
 
     pub fn enable(&mut self) {
         let Ok(old_line) = read(self.pid, self.addr) else {
-            eprintln!("Couldn't add a breakpoint at an adress that doesn't contain any data");
             std::process::exit(-1);
         };
 
