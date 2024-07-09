@@ -8,6 +8,7 @@ use nix::{
 use strum_macros::EnumString;
 
 use crate::breakpoint::Breakpoint;
+use crate::breakpoint::RealPtraceOps;
 
 static NO_COMMAND_PROVIDED_ERROR_MSG: &str = r#"
 No command or invalid command were provided
@@ -27,7 +28,7 @@ enum Command {
 pub struct Debugger {
     prog_name: String,
     pid: Pid,
-    breakpoints: HashMap<*mut c_void, Breakpoint>,
+    breakpoints: HashMap<*mut c_void, Breakpoint<RealPtraceOps>>,
 }
 
 fn str_to_c_void(s: &str) -> *mut c_void {
@@ -95,7 +96,7 @@ impl Debugger {
 
     pub fn set_breakpoint_at_address(&mut self, address: *mut c_void) {
         println!("Set breakpoint at address {:p}", address);
-        let mut b = Breakpoint::new(self.pid, address);
+        let mut b = Breakpoint::new(self.pid, address, RealPtraceOps);
         b.enable();
         self.breakpoints.insert(address, b);
     }
