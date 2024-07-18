@@ -1,4 +1,5 @@
 use nix::{sys::ptrace, unistd::Pid};
+use std::str::FromStr;
 use strum_macros::EnumString;
 
 #[derive(Debug, Clone, Copy, PartialEq, EnumString)]
@@ -186,10 +187,7 @@ pub fn get_register_name(r: Reg) -> Option<&'static str> {
 }
 
 pub fn get_register_from_name(name: &'static str) -> Option<Reg> {
-    REGISTERS_DESCRIPTORS
-        .iter()
-        .find(|&desc| desc.name == name)
-        .map(|desc| desc.r.clone())
+    Reg::from_str(name).ok()
 }
 
 pub fn get_register_value_from_dwarf_register(pid: Pid, reg_num: i32) -> Result<u64, nix::Error> {

@@ -7,8 +7,11 @@ use nix::{
 };
 use strum_macros::EnumString;
 
-use crate::{breakpoint::Breakpoint, register::{get_register_value, REGISTERS_DESCRIPTORS}};
 use crate::breakpoint::RealPtraceOps;
+use crate::{
+    breakpoint::Breakpoint,
+    register::{get_register_value, REGISTERS_DESCRIPTORS},
+};
 
 static NO_COMMAND_PROVIDED_ERROR_MSG: &str = r#"
 No command or invalid command were provided
@@ -100,7 +103,6 @@ impl Debugger {
         b.enable();
         self.breakpoints.insert(address, b);
     }
-
 
     pub fn dump_registers(&self) {
         REGISTERS_DESCRIPTORS.iter().for_each(|&desc| {
