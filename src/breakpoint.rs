@@ -101,7 +101,6 @@ mod test {
         mock_ops
             .expect_write()
             .withf(move |&p, &a, &d| {
-                println!("{d}");
                 p == pid && a as usize == *ADDR.lock().unwrap() && d == expected_data_after_enable
             })
             .times(1)

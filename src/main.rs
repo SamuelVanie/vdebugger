@@ -8,6 +8,7 @@ use std::{env, ffi::CString};
 
 pub mod debugger;
 pub mod breakpoint;
+pub mod register;
 
 fn main() {
     if env::args().len() < 2 {
