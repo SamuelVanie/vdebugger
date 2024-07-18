@@ -7,7 +7,7 @@ use nix::{
 };
 use strum_macros::EnumString;
 
-use crate::breakpoint::Breakpoint;
+use crate::{breakpoint::Breakpoint, register::{get_register_value, REGISTERS_DESCRIPTORS}};
 use crate::breakpoint::RealPtraceOps;
 
 static NO_COMMAND_PROVIDED_ERROR_MSG: &str = r#"
@@ -99,5 +99,13 @@ impl Debugger {
         let mut b = Breakpoint::new(self.pid, address, RealPtraceOps);
         b.enable();
         self.breakpoints.insert(address, b);
+    }
+
+
+    pub fn dump_registers(&self) {
+        REGISTERS_DESCRIPTORS.iter().for_each(|&desc| {
+            let val = get_register_value(self.pid, desc.r).unwrap();
+            println!("{} 0x{:016x}", desc.name, val);
+        });
     }
 }
