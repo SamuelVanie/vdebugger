@@ -7,23 +7,28 @@ use nix::{
 };
 use strum_macros::EnumString;
 
-use crate::breakpoint::RealPtraceOps;
 use crate::{
     breakpoint::Breakpoint,
     register::{get_register_value, REGISTERS_DESCRIPTORS},
+};
+use crate::{
+    breakpoint::RealPtraceOps,
+    register::{get_register_from_name, set_register_value},
 };
 
 static NO_COMMAND_PROVIDED_ERROR_MSG: &str = r#"
 No command or invalid command were provided
 Try using one of the following:
 1. continue
-2. exit
+2. break 0xADDRESS
+3. exit
 "#;
 
 #[derive(Debug, PartialEq, EnumString)]
 #[strum(ascii_case_insensitive)]
 enum Command {
     CONTINUE,
+    REGISTER,
     EXIT,
     BREAK,
 }
@@ -57,24 +62,79 @@ impl Debugger {
     }
 
     pub fn handle_command(&mut self, command: &String) {
-        let command_line = command.split(" ").collect::<Vec<&str>>();
+        let command_line: Vec<String> = command
+            .split_whitespace()
+            .map(|el| el.to_string())
+            .collect();
+
         let Some(command) = command_line.get(0) else {
             println!("{NO_COMMAND_PROVIDED_ERROR_MSG}");
             return;
         };
 
-        let args = command_line.get(1);
+        let arg1 = command_line.get(1);
+        let arg2 = command_line.get(2);
+        let arg3 = command_line.get(3);
 
         if let Ok(ecommand) = Command::from_str(command) {
             match ecommand {
                 Command::CONTINUE => self.continue_execution(),
                 Command::EXIT => std::process::exit(0),
                 Command::BREAK => {
-                    if args.is_some() {
-                        let args = args.unwrap();
-                        self.set_breakpoint_at_address(str_to_c_void(args));
+                    if arg1.is_some() {
+                        self.set_breakpoint_at_address(str_to_c_void(arg1.unwrap()));
                     } else {
                         eprintln!("No address provided for the breakpoint");
+                        return;
+                    };
+                }
+                Command::REGISTER => {
+                    if arg1.is_none() {
+                        eprintln!("You cannot call the register command without any arguments");
+                        return;
+                    }
+                    let arg1 = arg1.unwrap();
+                    let arg1 = arg1.to_lowercase();
+                    if arg1 == "dump" {
+                        self.dump_registers();
+                    } else if arg1 == "read" {
+                        if arg2.is_none() {
+                            eprintln!("This command requires a register name");
+                            return;
+                        }
+                        let arg2 = arg2.unwrap();
+                        let Some(reg) = get_register_from_name(arg2) else {
+                            eprintln!("This register doesn't exist in the table");
+                            return;
+                        };
+                        let Ok(val) = get_register_value(self.pid, reg) else {
+                            eprintln!("Cannot get the value of this register");
+                            return;
+                        };
+                        println!("{} -> {}", arg2, val);
+                    } else if arg1 == "write" {
+                        if arg2.is_none() {
+                            eprintln!("This command requires a register name");
+                            return;
+                        }
+                        let arg2 = arg2.unwrap();
+                        if arg3.is_none() {
+                            eprintln!(
+                                "This command requires a value that will be set to the register"
+                            );
+                            return;
+                        }
+                        let arg3 = arg3.unwrap();
+
+                        let Some(reg) = get_register_from_name(arg2) else {
+                            eprintln!("This register doesn't exist in the table");
+                            return;
+                        };
+
+                        let val = u64::from_str_radix(arg3.trim_start_matches("0x"), 16)
+                            .expect("Failed to parse address");
+
+                        set_register_value(self.pid, reg, val).unwrap();
                     }
                 }
             }
@@ -91,9 +151,8 @@ impl Debugger {
 
         while let ReadResult::Input(input) = reader.read_line().unwrap_or_else(|_| ReadResult::Eof)
         {
-            self.handle_command(&input);
             reader.add_history_unique(input.clone());
-            println!("got input {:?}", input);
+            self.handle_command(&input.clone());
         }
     }
 

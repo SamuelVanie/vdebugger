@@ -186,7 +186,7 @@ pub fn get_register_name(r: Reg) -> Option<&'static str> {
         .map(|desc| desc.name)
 }
 
-pub fn get_register_from_name(name: &'static str) -> Option<Reg> {
+pub fn get_register_from_name(name: &String) -> Option<Reg> {
     Reg::from_str(name).ok()
 }
 
