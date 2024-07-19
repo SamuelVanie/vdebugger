@@ -2,7 +2,7 @@ use std::{collections::HashMap, ffi::c_void, str::FromStr};
 
 use linefeed::{Interface, ReadResult};
 use nix::{
-    sys::{ptrace::cont, wait::waitpid},
+    sys::{ptrace::{self, cont}, wait::waitpid},
     unistd::Pid,
 };
 use strum_macros::EnumString;
@@ -21,7 +21,9 @@ No command or invalid command were provided
 Try using one of the following:
 1. continue
 2. break 0xADDRESS
-3. exit
+3. memory [read/write] 0xADDRESS
+4. register [dump/read/write] [0xADDRESS]
+5. exit
 "#;
 
 #[derive(Debug, PartialEq, EnumString)]
@@ -29,6 +31,7 @@ Try using one of the following:
 enum Command {
     CONTINUE,
     REGISTER,
+    MEMORY,
     EXIT,
     BREAK,
 }
@@ -104,6 +107,7 @@ impl Debugger {
                         }
                         let arg2 = arg2.unwrap();
                         let Some(reg) = get_register_from_name(arg2) else {
+
                             eprintln!("This register doesn't exist in the table");
                             return;
                         };
@@ -135,6 +139,37 @@ impl Debugger {
                             .expect("Failed to parse address");
 
                         set_register_value(self.pid, reg, val).unwrap();
+                    }
+                },
+                Command::MEMORY => {
+                    if arg1.is_none() {
+                        eprintln!("Command memory cannot be called without any arguments");
+                        return;
+                    }
+                    let arg1 = arg1.unwrap();
+                    if arg2.is_none() {
+                        eprintln!("You should precise the address you want to manipulate");
+                        return;
+                    }
+                    let arg2 = arg2.unwrap();
+
+                    if arg1 == "read" {
+                        let Ok(val) = ptrace::read(self.pid, str_to_c_void(arg2)) else {
+                            eprintln!("Cannot read data at this memory address");
+                            return;
+                        };
+                        println!("{} --> {}", arg2, val);
+                    } else if arg1 == "write" {
+                        if arg3.is_none() {
+                            eprintln!("You should precise the value that will be set to the register");
+                            return;
+                        }
+                        let arg3 = arg3.unwrap();
+                        let val = i64::from_str_radix(arg3.trim_start_matches("0x"), 16).expect("Failed to parse address");
+                        let Ok(_) = ptrace::write(self.pid, str_to_c_void(arg2), val) else {
+                            eprintln!("Cannot write to that address");
+                            return;
+                        };
                     }
                 }
             }
