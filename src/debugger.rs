@@ -39,16 +39,25 @@ enum Command {
 pub struct Debugger {
     prog_name: String,
     pid: Pid,
-    breakpoints: HashMap<*mut c_void, Breakpoint<RealPtraceOps>>,
+    breakpoints: HashMap<u64, Breakpoint<RealPtraceOps>>,
 }
 
-fn str_to_c_void(s: &str) -> *mut c_void {
+fn str_addr_to_c_void(s: &str) -> *mut c_void {
     let address =
         i64::from_str_radix(s.trim_start_matches("0x"), 16).expect("Failed to parse address");
     println!("The address is : {}", address);
 
     address as *mut c_void
 }
+
+fn str_to_addr(s: &str) -> i64 {
+    i64::from_str_radix(s.trim_start_matches("0x"), 16).expect("Failed to parse address")
+}
+
+fn str_to_reg_value(s: &str) -> u64 {
+    u64::from_str_radix(s.trim_start_matches("0x"), 16).expect("Failed to parse the string to an u64 value")
+}
+
 
 impl Debugger {
     pub fn new(prog_name: String, pid: Pid) -> Self {
@@ -85,7 +94,7 @@ impl Debugger {
                 Command::EXIT => std::process::exit(0),
                 Command::BREAK => {
                     if arg1.is_some() {
-                        self.set_breakpoint_at_address(str_to_c_void(arg1.unwrap()));
+                        self.set_breakpoint_at_address(arg1.unwrap());
                     } else {
                         eprintln!("No address provided for the breakpoint");
                         return;
@@ -135,9 +144,7 @@ impl Debugger {
                             return;
                         };
 
-                        let val = u64::from_str_radix(arg3.trim_start_matches("0x"), 16)
-                            .expect("Failed to parse address");
-
+                        let val = str_to_reg_value(arg3);
                         set_register_value(self.pid, reg, val).unwrap();
                     }
                 },
@@ -154,7 +161,7 @@ impl Debugger {
                     let arg2 = arg2.unwrap();
 
                     if arg1 == "read" {
-                        let Ok(val) = ptrace::read(self.pid, str_to_c_void(arg2)) else {
+                        let Ok(val) = ptrace::read(self.pid, str_addr_to_c_void(arg2)) else {
                             eprintln!("Cannot read data at this memory address");
                             return;
                         };
@@ -165,8 +172,8 @@ impl Debugger {
                             return;
                         }
                         let arg3 = arg3.unwrap();
-                        let val = i64::from_str_radix(arg3.trim_start_matches("0x"), 16).expect("Failed to parse address");
-                        let Ok(_) = ptrace::write(self.pid, str_to_c_void(arg2), val) else {
+                        let val = str_to_addr(arg3);
+                        let Ok(_) = ptrace::write(self.pid, str_addr_to_c_void(arg2), val) else {
                             eprintln!("Cannot write to that address");
                             return;
                         };
