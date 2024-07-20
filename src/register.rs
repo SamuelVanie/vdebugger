@@ -204,7 +204,10 @@ pub fn get_register_value_from_dwarf_register(pid: Pid, reg_num: i32) -> Result<
 }
 
 pub fn get_register_value(pid: Pid, r: Reg) -> Result<u64, nix::Error> {
-    let regs = ptrace::getregs(pid)?;
+    let regs = ptrace::getregs(pid).unwrap_or_else(|_| {
+        eprintln!("Cannot get this process' registers");
+        std::process::exit(-1);
+    });
 
     let val = match r {
         Reg::Rax => regs.rax,
@@ -240,7 +243,10 @@ pub fn get_register_value(pid: Pid, r: Reg) -> Result<u64, nix::Error> {
 }
 
 pub fn set_register_value(pid: Pid, r: Reg, value: u64) -> Result<(), nix::Error> {
-    let mut regs = ptrace::getregs(pid)?;
+    let mut regs = ptrace::getregs(pid).unwrap_or_else(|_| {
+        eprintln!("Cannot get this process' registers");
+        std::process::exit(-1);
+    });
 
     match r {
         Reg::Rax => regs.rax = value,

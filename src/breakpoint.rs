@@ -2,6 +2,7 @@ use std::ffi::{c_long, c_void};
 
 use nix::{sys::ptrace, unistd::Pid};
 
+#[derive(Clone)]
 pub struct RealPtraceOps;
 
 #[cfg(test)]
@@ -23,11 +24,12 @@ impl PtraceOps for RealPtraceOps {
     }
 }
 
+#[derive(Clone)]
 pub struct Breakpoint<T: PtraceOps> {
     pid: Pid,
     addr: *mut c_void,
     saved_data: i64,
-    enabled: bool,
+    pub enabled: bool,
     ptrace_ops: T,
 }
 

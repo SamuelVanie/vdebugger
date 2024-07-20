@@ -9,7 +9,7 @@ use strum_macros::EnumString;
 
 use crate::{
     breakpoint::Breakpoint,
-    register::{get_register_value, REGISTERS_DESCRIPTORS},
+    register::{get_register_value, Reg, REGISTERS_DESCRIPTORS},
 };
 use crate::{
     breakpoint::RealPtraceOps,
@@ -68,7 +68,8 @@ impl Debugger {
         }
     }
 
-    pub fn continue_execution(&self) {
+    pub fn continue_execution(&mut self) {
+        self.step_over_breakpoint();
         cont(self.pid, None).unwrap();
         let _wait_status = waitpid(self.pid, None);
     }
@@ -198,17 +199,65 @@ impl Debugger {
         }
     }
 
-    pub fn set_breakpoint_at_address(&mut self, address: *mut c_void) {
-        println!("Set breakpoint at address {:p}", address);
-        let mut b = Breakpoint::new(self.pid, address, RealPtraceOps);
+    pub fn set_breakpoint_at_address(&mut self, address: &str) {
+        println!("Set breakpoint at address {}", address);
+        let addr = str_addr_to_c_void(address);
+        let mut b = Breakpoint::new(self.pid, addr, RealPtraceOps);
         b.enable();
-        self.breakpoints.insert(address, b);
+        self.breakpoints.insert(str_to_reg_value(address), b);
+    }
+
+
+
+    fn step_over_breakpoint(&mut self) {
+        let current_line = self.get_pc() - 1; // because execution will be past the breakpoint
+        if self.breakpoints.contains_key(&current_line) {
+            let bp = self.breakpoints.get_mut(&current_line).unwrap();
+
+            if bp.enabled {
+                let prev = current_line;
+                self.set_pc(prev);
+
+                let bp = self.breakpoints.get_mut(&current_line).unwrap();
+                bp.disable();
+
+                let Ok(_) = ptrace::step(self.pid, None) else {
+                    eprintln!("Cannot go to the next line");
+                    std::process::exit(-1);
+                };
+
+                let Ok(_) = waitpid(self.pid, None) else {
+                    eprintln!("Cannot communicate with the debuggee process");
+                    std::process::exit(-1);
+                };
+
+                bp.enable();
+            }
+        }
     }
 
     pub fn dump_registers(&self) {
         REGISTERS_DESCRIPTORS.iter().for_each(|&desc| {
-            let val = get_register_value(self.pid, desc.r).unwrap();
+            let Ok(val) = get_register_value(self.pid, desc.r) else {
+                eprintln!("Cannot get value of the register {:?}. Verify that the debuggee's process hasn't ended", desc.r);
+                std::process::exit(-1)
+            };
             println!("{} 0x{:016x}", desc.name, val);
         });
+    }
+
+    fn get_pc(&self) -> u64 {
+        let Ok(pc) = get_register_value(self.pid, Reg::Rip) else {
+            eprintln!("Cannot get the program counter");
+            std::process::exit(-1);
+        };
+        pc
+    }
+
+    fn set_pc(&self, pc: u64) {
+        let Ok(_) = set_register_value(self.pid, Reg::Rip, pc) else {
+            eprintln!("Cannot move the program counter");
+            std::process::exit(-1);
+        };
     }
 }
