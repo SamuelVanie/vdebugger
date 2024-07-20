@@ -44,7 +44,7 @@ pub struct Debugger {
 
 fn str_to_c_void(s: &str) -> *mut c_void {
     let address =
-        usize::from_str_radix(s.trim_start_matches("0x"), 16).expect("Failed to parse address");
+        i64::from_str_radix(s.trim_start_matches("0x"), 16).expect("Failed to parse address");
     println!("The address is : {}", address);
 
     address as *mut c_void
