@@ -1,8 +1,11 @@
-use std::{collections::HashMap, ffi::c_void, str::FromStr};
+use std::{collections::HashMap, ffi::c_void, ops::ControlFlow, str::FromStr};
 
 use linefeed::{Interface, ReadResult};
 use nix::{
-    sys::{ptrace::{self, cont}, wait::waitpid},
+    sys::{
+        ptrace::{self, cont},
+        wait::waitpid,
+    },
     unistd::Pid,
 };
 use strum_macros::EnumString;
@@ -55,9 +58,9 @@ fn str_to_addr(s: &str) -> i64 {
 }
 
 fn str_to_reg_value(s: &str) -> u64 {
-    u64::from_str_radix(s.trim_start_matches("0x"), 16).expect("Failed to parse the string to an u64 value")
+    u64::from_str_radix(s.trim_start_matches("0x"), 16)
+        .expect("Failed to parse the string to an u64 value")
 }
-
 
 impl Debugger {
     pub fn new(prog_name: String, pid: Pid) -> Self {
@@ -94,96 +97,144 @@ impl Debugger {
                 Command::CONTINUE => self.continue_execution(),
                 Command::EXIT => std::process::exit(0),
                 Command::BREAK => {
-                    if arg1.is_some() {
-                        self.set_breakpoint_at_address(arg1.unwrap());
-                    } else {
-                        eprintln!("No address provided for the breakpoint");
+                    if let ControlFlow::Break(_) = self.break_command_handle(arg1) {
                         return;
-                    };
+                    }
                 }
                 Command::REGISTER => {
-                    if arg1.is_none() {
-                        eprintln!("You cannot call the register command without any arguments");
+                    if let ControlFlow::Break(_) = self.register_command_handle(arg1, arg2, arg3) {
                         return;
                     }
-                    let arg1 = arg1.unwrap();
-                    let arg1 = arg1.to_lowercase();
-                    if arg1 == "dump" {
-                        self.dump_registers();
-                    } else if arg1 == "read" {
-                        if arg2.is_none() {
-                            eprintln!("This command requires a register name");
-                            return;
-                        }
-                        let arg2 = arg2.unwrap();
-                        let Some(reg) = get_register_from_name(arg2) else {
-
-                            eprintln!("This register doesn't exist in the table");
-                            return;
-                        };
-                        let Ok(val) = get_register_value(self.pid, reg) else {
-                            eprintln!("Cannot get the value of this register");
-                            return;
-                        };
-                        println!("{} -> {}", arg2, val);
-                    } else if arg1 == "write" {
-                        if arg2.is_none() {
-                            eprintln!("This command requires a register name");
-                            return;
-                        }
-                        let arg2 = arg2.unwrap();
-                        if arg3.is_none() {
-                            eprintln!(
-                                "This command requires a value that will be set to the register"
-                            );
-                            return;
-                        }
-                        let arg3 = arg3.unwrap();
-
-                        let Some(reg) = get_register_from_name(arg2) else {
-                            eprintln!("This register doesn't exist in the table");
-                            return;
-                        };
-
-                        let val = str_to_reg_value(arg3);
-                        set_register_value(self.pid, reg, val).unwrap();
-                    }
-                },
+                }
                 Command::MEMORY => {
-                    if arg1.is_none() {
-                        eprintln!("Command memory cannot be called without any arguments");
+                    if let ControlFlow::Break(_) = self.memory_command_handle(arg1, arg2, arg3) {
                         return;
-                    }
-                    let arg1 = arg1.unwrap();
-                    if arg2.is_none() {
-                        eprintln!("You should precise the address you want to manipulate");
-                        return;
-                    }
-                    let arg2 = arg2.unwrap();
-
-                    if arg1 == "read" {
-                        let Ok(val) = ptrace::read(self.pid, str_addr_to_c_void(arg2)) else {
-                            eprintln!("Cannot read data at this memory address");
-                            return;
-                        };
-                        println!("{} --> {}", arg2, val);
-                    } else if arg1 == "write" {
-                        if arg3.is_none() {
-                            eprintln!("You should precise the value that will be set to the register");
-                            return;
-                        }
-                        let arg3 = arg3.unwrap();
-                        let val = str_to_addr(arg3);
-                        let Ok(_) = ptrace::write(self.pid, str_addr_to_c_void(arg2), val) else {
-                            eprintln!("Cannot write to that address");
-                            return;
-                        };
                     }
                 }
             }
         } else {
             println!("{NO_COMMAND_PROVIDED_ERROR_MSG}");
         }
+    }
+
+    fn break_command_handle(&mut self, arg1: Option<&String>) -> ControlFlow<()> {
+        if arg1.is_some() {
+            self.set_breakpoint_at_address(arg1.unwrap());
+        } else {
+            eprintln!("No address provided for the breakpoint");
+            return ControlFlow::Break(());
+        };
+        ControlFlow::Continue(())
+    }
+
+    fn register_command_handle(
+        &mut self,
+        arg1: Option<&String>,
+        arg2: Option<&String>,
+        arg3: Option<&String>,
+    ) -> ControlFlow<()> {
+        if arg1.is_none() {
+            eprintln!("You cannot call the register command without any arguments");
+            return ControlFlow::Break(());
+        }
+        let arg1 = arg1.unwrap();
+        let arg1 = arg1.to_lowercase();
+        if arg1 == "dump" {
+            self.dump_registers();
+        } else if arg1 == "read" {
+            if let ControlFlow::Break(_) = self.register_read(arg2) {
+                return ControlFlow::Break(());
+            }
+        } else if arg1 == "write" {
+            if let ControlFlow::Break(_) = self.register_write(arg2, arg3) {
+                return ControlFlow::Break(());
+            }
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn memory_command_handle(
+        &mut self,
+        arg1: Option<&String>,
+        arg2: Option<&String>,
+        arg3: Option<&String>,
+    ) -> ControlFlow<()> {
+        if arg1.is_none() {
+            eprintln!("Command memory cannot be called without any arguments");
+            return ControlFlow::Break(());
+        }
+        let arg1 = arg1.unwrap();
+        if arg2.is_none() {
+            eprintln!("You should precise the address you want to manipulate");
+            return ControlFlow::Break(());
+        }
+        let arg2 = arg2.unwrap();
+
+        if arg1 == "read" {
+            let Ok(val) = ptrace::read(self.pid, str_addr_to_c_void(arg2)) else {
+                eprintln!("Cannot read data at this memory address");
+                return ControlFlow::Break(());
+            };
+            println!("{} --> {}", arg2, val);
+        } else if arg1 == "write" {
+            if let ControlFlow::Break(_) = self.memory_write(arg3, arg2) {
+                return ControlFlow::Break(());
+            }
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn memory_write(&mut self, arg3: Option<&String>, arg2: &String) -> ControlFlow<()> {
+        if arg3.is_none() {
+            eprintln!("You should precise the value that will be set to the register");
+            return ControlFlow::Break(());
+        }
+        let arg3 = arg3.unwrap();
+        let val = str_to_addr(arg3);
+        let Ok(_) = ptrace::write(self.pid, str_addr_to_c_void(arg2), val) else {
+            eprintln!("Cannot write to that address");
+            return ControlFlow::Break(());
+        };
+        ControlFlow::Continue(())
+    }
+
+    fn register_write(&mut self, arg2: Option<&String>, arg3: Option<&String>) -> ControlFlow<()> {
+        if arg2.is_none() {
+            eprintln!("This command requires a register name");
+            return ControlFlow::Break(());
+        }
+        let arg2 = arg2.unwrap();
+        if arg3.is_none() {
+            eprintln!("This command requires a value that will be set to the register");
+            return ControlFlow::Break(());
+        }
+        let arg3 = arg3.unwrap();
+        let Some(reg) = get_register_from_name(arg2) else {
+            eprintln!("This register doesn't exist in the table");
+            return ControlFlow::Break(());
+        };
+        let val = str_to_reg_value(arg3);
+        set_register_value(self.pid, reg, val).unwrap();
+
+        ControlFlow::Continue(())
+    }
+
+    fn register_read(&mut self, arg2: Option<&String>) -> ControlFlow<()> {
+        if arg2.is_none() {
+            eprintln!("This command requires a register name");
+            return ControlFlow::Break(());
+        }
+        let arg2 = arg2.unwrap();
+        let Some(reg) = get_register_from_name(arg2) else {
+            eprintln!("This register doesn't exist in the table");
+            return ControlFlow::Break(());
+        };
+        let Ok(val) = get_register_value(self.pid, reg) else {
+            eprintln!("Cannot get the value of this register");
+            return ControlFlow::Break(());
+        };
+        println!("{} -> {}", arg2, val);
+        ControlFlow::Continue(())
     }
 
     pub fn run(&mut self) {
@@ -206,8 +257,6 @@ impl Debugger {
         b.enable();
         self.breakpoints.insert(str_to_reg_value(address), b);
     }
-
-
 
     fn step_over_breakpoint(&mut self) {
         let current_line = self.get_pc() - 1; // because execution will be past the breakpoint
