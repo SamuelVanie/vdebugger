@@ -31,7 +31,7 @@
         defaultPackage = vdebuggerBuild;
 
         devShell = pkgs.mkShell {
-          buildInputs = [ (rustVersion.override { extensions = [ "rust-src" ]; }) ];
+          buildInputs = [ (rustVersion.override { extensions = [ "rust-src" ]; }) pkgs.dwarfdump ];
         };
 
       });
