@@ -12,7 +12,7 @@ pub mod register;
 
 fn main() {
     if env::args().len() < 2 {
-        eprintln!("No program name were specified");
+        eprintln!("No program name were given");
         std::process::exit(-1);
     }
 
